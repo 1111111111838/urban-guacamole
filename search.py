@@ -1,9 +1,9 @@
 import requests
 import sys
+import re
 
-def search_lyzem(query):
-    # שימוש בכתובת החיפוש של Lyzem שמחזירה תוצאות מערוצים ציבוריים
-    # אנחנו נבצע חיפוש ונסנן את הכתובות של הטלגרם
+def search_files_only(query):
+    # חיפוש במנוע Lyzem
     url = f"https://lyzem.com/search?q={query}"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -13,22 +13,19 @@ def search_lyzem(query):
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         
-        # אנחנו מחפשים קישורים שמתחילים ב-t.me בתוך ה-HTML
-        import re
-        # מוצא את כל הקישורים לערוצים או הודעות
-        links = re.findall(r't\.me\/[\w\d\-_/]+', response.text)
+        # רג'קס שמוצא קישורי טלגרם שמסתיימים במספר הודעה (למשל t.me/channel/123)
+        # הביטוי /\d+$ מבטיח שיש מספר בסוף הקישור
+        links = re.findall(r't\.me\/[\w\d\-_]+\/\d+', response.text)
         
         clean_links = []
         for link in links:
-            # מוודא שזה פורמט של תצוגה מקדימה (מוסיף /s/ אם חסר)
-            if '/s/' not in link:
-                parts = link.split('/')
-                if len(parts) > 1:
-                    link = f"{parts[0]}/s/{'/'.join(parts[1:])}"
+            # הפיכת הקישור לפורמט תצוגה מקדימה ציבורי (/s/) כדי שיעבוד עם yt-dlp
+            parts = link.split('/')
+            # מבנה רצוי: https://t.me/s/channel_name/123
+            formatted_link = f"https://t.me/s/{parts[1]}/{parts[2]}"
             
-            full_link = "https://" + link
-            if full_link not in clean_links:
-                clean_links.append(full_link)
+            if formatted_link not in clean_links:
+                clean_links.append(formatted_link)
         
         return clean_links
     except Exception as e:
@@ -36,15 +33,14 @@ def search_lyzem(query):
         return []
 
 if __name__ == "__main__":
-    query = sys.argv[1] if len(sys.argv) > 1 else "sample"
-    print(f"--- מחפש במאגר טלגרם עבור: {query} ---")
+    search_query = sys.argv[1] if len(sys.argv) > 1 else "sample"
+    print(f"--- מחפש קישורי קבצים עבור: {search_query} ---")
     
-    results = search_lyzem(query)
+    results = search_files_only(search_query)
     
     if results:
-        print(f"נמצאו {len(results)} תוצאות פוטנציאליות:")
-        # מציג רק את ה-10 הראשונות כדי לא להעמיס
-        for i, link in enumerate(results[:10], 1):
+        print(f"נמצאו {len(results)} הודעות עם קבצים פוטנציאליים:")
+        for i, link in enumerate(results, 1):
             print(f"{i}. {link}")
     else:
-        print("לא נמצאו תוצאות. נסה מילת חיפוש אחרת (למשל 'nature' או 'tech').")
+        print("לא נמצאו הודעות ספציפיות. נסה מילת חיפוש אחרת או באנגלית.")
