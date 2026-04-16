@@ -2,30 +2,36 @@ import requests
 import sys
 import re
 
-def search_files_only(query):
-    # חיפוש במנוע Lyzem
+def search_telegram_wide(query):
+    # חיפוש רחב ב-Lyzem ללא סינונים קשוחים
     url = f"https://lyzem.com/search?q={query}"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
     }
 
     try:
         response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        
-        # רג'קס שמוצא קישורי טלגרם שמסתיימים במספר הודעה (למשל t.me/channel/123)
-        # הביטוי /\d+$ מבטיח שיש מספר בסוף הקישור
-        links = re.findall(r't\.me\/[\w\d\-_]+\/\d+', response.text)
+        # חיפוש כל מה שדומה לקישור טלגרם (t.me/something)
+        raw_links = re.findall(r't\.me\/[\w\d\-_/]+', response.text)
         
         clean_links = []
-        for link in links:
-            # הפיכת הקישור לפורמט תצוגה מקדימה ציבורי (/s/) כדי שיעבוד עם yt-dlp
-            parts = link.split('/')
-            # מבנה רצוי: https://t.me/s/channel_name/123
-            formatted_link = f"https://t.me/s/{parts[1]}/{parts[2]}"
-            
-            if formatted_link not in clean_links:
-                clean_links.append(formatted_link)
+        for link in raw_links:
+            # הפיכה לפורמט תצוגה מקדימה ציבורי (/s/)
+            if '/s/' not in link:
+                parts = link.split('/')
+                if len(parts) > 1:
+                    formatted = f"https://t.me/s/{parts[1]}"
+                    # אם יש המשך לקישור (כמו מספר), נוסיף אותו
+                    if len(parts) > 2:
+                        formatted += f"/{parts[2]}"
+                    link = formatted
+                else:
+                    link = f"https://t.me/s/{parts[0]}"
+            else:
+                link = "https://" + link
+
+            if link not in clean_links and "lyzem" not in link:
+                clean_links.append(link)
         
         return clean_links
     except Exception as e:
@@ -33,14 +39,14 @@ def search_files_only(query):
         return []
 
 if __name__ == "__main__":
-    search_query = sys.argv[1] if len(sys.argv) > 1 else "sample"
-    print(f"--- מחפש קישורי קבצים עבור: {search_query} ---")
+    search_term = sys.argv[1] if len(sys.argv) > 1 else "news"
+    print(f"--- Searching for: {search_term} ---")
     
-    results = search_files_only(search_query)
+    results = search_telegram_wide(search_term)
     
     if results:
-        print(f"נמצאו {len(results)} הודעות עם קבצים פוטנציאליים:")
-        for i, link in enumerate(results, 1):
+        print(f"Found {len(results)} results:")
+        for i, link in enumerate(results[:15], 1): # מציג עד 15 תוצאות
             print(f"{i}. {link}")
     else:
-        print("לא נמצאו הודעות ספציפיות. נסה מילת חיפוש אחרת או באנגלית.")
+        print("No results found. Try a broader term.")
